@@ -1,0 +1,7 @@
+yfinance
+pandas
+streamlit
+plotly
+schedule
+backtrader
+sqlalchemy
