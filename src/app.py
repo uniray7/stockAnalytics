@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from database import get_session, StockData
+from backtest import run_backtest
 import datetime
 
 st.set_page_config(page_title="US Stock Real-time Analysis", layout="wide")
@@ -109,3 +110,33 @@ else:
     # Raw Data Table
     with st.expander("View Raw Data"):
         st.dataframe(df.sort_values('timestamp', ascending=False).set_index('timestamp'))
+
+    st.markdown("---")
+    st.header("⚙️ Strategy Backtesting")
+    st.markdown("Test trading strategies on the historical data fetched.")
+
+    st.sidebar.header("Backtest Settings")
+    strategy = st.sidebar.selectbox("Select Strategy", ["SMA Crossover", "MACD"])
+
+    params = {}
+    if strategy == "SMA Crossover":
+        params['fast_period'] = st.sidebar.slider("Fast SMA Period", 5, 20, 10)
+        params['slow_period'] = st.sidebar.slider("Slow SMA Period", 20, 60, 30)
+
+    if st.sidebar.button("Run Backtest"):
+        with st.spinner('Running Backtest...'):
+            metrics, error = run_backtest(df, strategy, **params)
+
+            if error:
+                st.error(f"Backtest failed: {error}")
+            else:
+                st.success("Backtest Completed Successfully!")
+
+                metrics_col1, metrics_col2, metrics_col3, metrics_col4 = st.columns(4)
+                metrics_col1.metric("Final Portfolio Value", f"${metrics['final_value']:.2f}", f"{metrics['pnl_pct']:.2f}%")
+                metrics_col2.metric("Total PnL", f"${metrics['pnl']:.2f}")
+                metrics_col3.metric("Win Rate", f"{metrics['win_rate']:.1f}%", f"{metrics['total_trades']} Trades", delta_color="off")
+                metrics_col4.metric("Max Drawdown", f"{metrics['max_drawdown']:.2f}%")
+
+                if metrics['total_trades'] == 0:
+                    st.info("No trades were executed during this period with the given parameters.")
