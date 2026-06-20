@@ -7,20 +7,21 @@
 - **Backtesting**: `src/backtest.py` integrates `backtrader` with the Streamlit app. It supports `SMA Crossover` and `MACD` strategies.
 
 ## Commands
-- **Activate Virtual Environment**: `source venv/bin/activate`
-- **Run Crawler**: `python src/crawler.py`
-- **Run Web App**: `streamlit run src/app.py`
+- **Run the service (local or Railway)**: `./start.sh` — single entrypoint for both environments. Locally it creates/activates `venv`, installs deps, sets dev creds, starts the crawler in the background, and runs the dashboard on `localhost`. On Railway (detected via `$RAILWAY_ENVIRONMENT`) it skips local setup and binds `0.0.0.0` headless.
+- **Activate Virtual Environment** (manual): `source venv/bin/activate`
+- **Run Crawler** (manual): `python src/crawler.py`
+- **Run Web App** (manual): `streamlit run src/app.py`
 
 ## Authentication
 - **Mechanism**: Simple username/password login. `src/app.py` gates every page via `require_auth()`, which renders a login form and tracks state in `st.session_state["authenticated"]`. Credentials are compared with `hmac.compare_digest` (constant time).
 - **Credentials**: Read from environment variables `APP_USERNAME` and `APP_PASSWORD`. If either is unset, the app refuses to load (no default/open access). A sidebar "Log out" button clears the session.
-- **Local dev**: `APP_USERNAME=me APP_PASSWORD=secret streamlit run src/app.py`.
+- **Local dev**: `./start.sh` defaults to `me`/`secret`; override by exporting first (`APP_USERNAME=… APP_PASSWORD=… ./start.sh`).
 - **Production (Railway)**: Set `APP_USERNAME` and `APP_PASSWORD` in the Railway dashboard (Variables tab).
 
 ## Deployment
 - **Platform**: Deployed on [Railway](https://railway.app), a PaaS (Platform as a Service) that builds and runs the app from this repo.
 - **Config**: `railway.json` defines the build and deploy settings. Builder is `RAILPACK`; restart policy is `ON_FAILURE` with up to 5 retries.
-- **Start command**: `bash start.sh` (also mirrored in `Procfile`). It launches `src/crawler.py` in the background and runs the Streamlit dashboard in the foreground.
+- **Start command**: `bash start.sh` (also mirrored in `Procfile`). The same `start.sh` serves local dev and Railway, branching on `$RAILWAY_ENVIRONMENT`. It launches `src/crawler.py` in the background and runs the Streamlit dashboard in the foreground.
 - **Port binding**: Streamlit binds to Railway's injected `$PORT` (defaults to `8501` locally), on address `0.0.0.0` in headless mode.
 - **Persistence note**: SQLite data at `data/stocks.db` lives on the container's ephemeral filesystem and is reset on redeploy unless a Railway volume is mounted.
 
