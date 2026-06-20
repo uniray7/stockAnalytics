@@ -2,10 +2,44 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from database import get_session, StockData
-from backtest import run_backtest
 import datetime
+import hmac
+import os
+from backtest import run_backtest
 
 st.set_page_config(page_title="US Stock Real-time Analysis", layout="wide")
+
+# --- Authentication (simple username/password from environment variables) ---
+APP_USERNAME = os.environ.get("APP_USERNAME", "")
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
+
+def require_auth():
+    """Gate the app behind a username/password login defined via env vars."""
+    if not APP_USERNAME or not APP_PASSWORD:
+        st.title("🔒 US Stock Real-time Analysis")
+        st.error("Authentication is not configured. Set APP_USERNAME and APP_PASSWORD.")
+        st.stop()
+
+    if st.session_state.get("authenticated"):
+        return
+
+    st.title("🔒 US Stock Real-time Analysis")
+    st.markdown("This service is private. Please sign in to continue.")
+    with st.form("login"):
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Sign in")
+
+    if submitted:
+        # Constant-time comparison to avoid leaking length/content via timing.
+        if hmac.compare_digest(username, APP_USERNAME) and hmac.compare_digest(password, APP_PASSWORD):
+            st.session_state["authenticated"] = True
+            st.rerun()
+        else:
+            st.error("Invalid username or password.")
+    st.stop()
+
+require_auth()
 
 def load_data(ticker, time_range):
     """Load stock data from SQLite DB"""
@@ -30,6 +64,13 @@ def load_data(ticker, time_range):
     df = pd.read_sql(query.statement, session.bind)
     session.close()
     return df
+
+def _logout():
+    st.session_state["authenticated"] = False
+
+with st.sidebar:
+    st.caption(f"Signed in as {APP_USERNAME}")
+    st.button("Log out", on_click=_logout, use_container_width=True)
 
 st.title("📈 US Stock Real-time Analysis")
 st.markdown("Real-time data fetched every 5 minutes from Yahoo Finance.")

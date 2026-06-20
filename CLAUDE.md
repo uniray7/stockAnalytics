@@ -11,6 +11,19 @@
 - **Run Crawler**: `python src/crawler.py`
 - **Run Web App**: `streamlit run src/app.py`
 
+## Authentication
+- **Mechanism**: Simple username/password login. `src/app.py` gates every page via `require_auth()`, which renders a login form and tracks state in `st.session_state["authenticated"]`. Credentials are compared with `hmac.compare_digest` (constant time).
+- **Credentials**: Read from environment variables `APP_USERNAME` and `APP_PASSWORD`. If either is unset, the app refuses to load (no default/open access). A sidebar "Log out" button clears the session.
+- **Local dev**: `APP_USERNAME=me APP_PASSWORD=secret streamlit run src/app.py`.
+- **Production (Railway)**: Set `APP_USERNAME` and `APP_PASSWORD` in the Railway dashboard (Variables tab).
+
+## Deployment
+- **Platform**: Deployed on [Railway](https://railway.app), a PaaS (Platform as a Service) that builds and runs the app from this repo.
+- **Config**: `railway.json` defines the build and deploy settings. Builder is `RAILPACK`; restart policy is `ON_FAILURE` with up to 5 retries.
+- **Start command**: `bash start.sh` (also mirrored in `Procfile`). It launches `src/crawler.py` in the background and runs the Streamlit dashboard in the foreground.
+- **Port binding**: Streamlit binds to Railway's injected `$PORT` (defaults to `8501` locally), on address `0.0.0.0` in headless mode.
+- **Persistence note**: SQLite data at `data/stocks.db` lives on the container's ephemeral filesystem and is reset on redeploy unless a Railway volume is mounted.
+
 ## Development Guidelines
 - Always use the `venv` for running commands (`source venv/bin/activate`).
 - Ensure `PYTHONPATH` allows imports from `src/` when necessary.
