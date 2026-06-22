@@ -14,7 +14,8 @@
 
 ## Authentication
 - **Mechanism**: Simple username/password login. `src/app.py` gates every page via `require_auth()`, which renders a login form and tracks state in `st.session_state["authenticated"]`. Credentials are compared with `hmac.compare_digest` (constant time).
-- **Credentials**: Read from environment variables `APP_USERNAME` and `APP_PASSWORD`. If either is unset, the app refuses to load (no default/open access). A sidebar "Log out" button clears the session.
+- **Persistent session**: On successful login a signed `<expiry>.<hmac-sha256>` token is stored in a browser cookie (`sa_auth`) via `streamlit-cookies-controller`, with a 1-hour TTL (`SESSION_TTL_SECONDS`). A refresh restores the session from the cookie instead of re-prompting; a forged or expired token fails the signature/expiry check. The signing key is `APP_SECRET` if set, otherwise derived from `APP_USERNAME`/`APP_PASSWORD` (so changing the password invalidates existing sessions). "Log out" clears both the session and the cookie.
+- **Credentials**: Read from environment variables `APP_USERNAME` and `APP_PASSWORD`. If either is unset, the app refuses to load (no default/open access).
 - **Local dev**: `./start.sh` defaults to `me`/`secret`; override by exporting first (`APP_USERNAME=… APP_PASSWORD=… ./start.sh`).
 - **Production (Railway)**: Set `APP_USERNAME` and `APP_PASSWORD` in the Railway dashboard (Variables tab).
 

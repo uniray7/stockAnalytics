@@ -3,15 +3,52 @@ import pandas as pd
 import plotly.graph_objects as go
 from database import get_session, StockData
 import datetime
+import hashlib
 import hmac
 import os
+import time
 from backtest import run_backtest
+from streamlit_cookies_controller import CookieController
 
 st.set_page_config(page_title="US Stock Real-time Analysis", layout="wide")
 
 # --- Authentication (simple username/password from environment variables) ---
 APP_USERNAME = os.environ.get("APP_USERNAME", "")
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
+
+# Keep a successful login valid for this long, even across browser refreshes.
+SESSION_TTL_SECONDS = 60 * 60  # 1 hour
+_COOKIE_NAME = "sa_auth"
+# Key used to sign the session cookie. Defaults to the credentials so no extra
+# config is needed; changing the password invalidates existing sessions.
+_COOKIE_SECRET = (os.environ.get("APP_SECRET") or f"{APP_USERNAME}:{APP_PASSWORD}").encode()
+
+# Reads/writes the browser cookie that persists the login across refreshes.
+controller = CookieController()
+
+
+def _sign(message: str) -> str:
+    return hmac.new(_COOKIE_SECRET, message.encode(), hashlib.sha256).hexdigest()
+
+
+def _make_session_token() -> str:
+    """Build a signed `<expiry>.<signature>` token for the auth cookie."""
+    expiry = str(int(time.time()) + SESSION_TTL_SECONDS)
+    return f"{expiry}.{_sign(expiry)}"
+
+
+def _token_is_valid(token) -> bool:
+    """True if the cookie token is well-formed, correctly signed, and unexpired."""
+    if not token or "." not in token:
+        return False
+    expiry, signature = token.rsplit(".", 1)
+    if not hmac.compare_digest(signature, _sign(expiry)):
+        return False
+    try:
+        return int(expiry) > time.time()
+    except ValueError:
+        return False
+
 
 def require_auth():
     """Gate the app behind a username/password login defined via env vars."""
@@ -21,6 +58,11 @@ def require_auth():
         st.stop()
 
     if st.session_state.get("authenticated"):
+        return
+
+    # Restore a prior login from the signed cookie (survives page refresh).
+    if _token_is_valid(controller.get(_COOKIE_NAME)):
+        st.session_state["authenticated"] = True
         return
 
     st.title("🔒 US Stock Real-time Analysis")
@@ -34,6 +76,11 @@ def require_auth():
         # Constant-time comparison to avoid leaking length/content via timing.
         if hmac.compare_digest(username, APP_USERNAME) and hmac.compare_digest(password, APP_PASSWORD):
             st.session_state["authenticated"] = True
+            # Persist the login so a refresh within the next hour stays signed in.
+            controller.set(_COOKIE_NAME, _make_session_token(), max_age=SESSION_TTL_SECONDS)
+            # Give the browser a moment to actually write the cookie before the
+            # rerun tears down this run; otherwise the write can be dropped.
+            time.sleep(0.3)
             st.rerun()
         else:
             st.error("Invalid username or password.")
@@ -67,6 +114,9 @@ def load_data(ticker, time_range):
 
 def _logout():
     st.session_state["authenticated"] = False
+    # Drop the persisted cookie so the session does not auto-restore.
+    if controller.get(_COOKIE_NAME) is not None:
+        controller.remove(_COOKIE_NAME)
 
 with st.sidebar:
     st.caption(f"Signed in as {APP_USERNAME}")
