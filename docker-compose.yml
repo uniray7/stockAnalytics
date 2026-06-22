@@ -1,0 +1,23 @@
+# Local-dev PostgreSQL for the Stock Analytics crawler/dashboard.
+# Started automatically by start.sh in local mode; data persists in a named volume.
+services:
+  postgres:
+    image: postgres:16
+    container_name: stockanalytics-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: stocks
+      POSTGRES_PASSWORD: stocks
+      POSTGRES_DB: stocks
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stocks -d stocks"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

@@ -2,12 +2,13 @@
 
 ## Architecture
 - **Crawler**: `src/crawler.py` uses `yfinance` to fetch real-time stock data (5-minute intervals) for Top Tech stocks (AAPL, MSFT, GOOGL, AMZN, NVDA, TSLA, META). Scheduled using the `schedule` library.
-- **Database**: `src/database.py` sets up a local SQLite database at `data/stocks.db` using `SQLAlchemy`. Stores OHLCV data.
-- **Web App**: `src/app.py` runs a `Streamlit` dashboard, pulling data from SQLite and visualizing it via `Plotly` (Candlestick and Volume charts).
+- **Database**: `src/database.py` connects to **PostgreSQL** via `SQLAlchemy`, reading the connection string from the `DATABASE_PUBLIC_URL` env var (user, password, host/fqdn, port, db name all embedded). The app refuses to start if it is unset. Stores OHLCV data. Locally, Postgres runs as a Docker container (`docker-compose.yml`); in production it points at a managed Postgres instance.
+- **Web App**: `src/app.py` runs a `Streamlit` dashboard, pulling data from Postgres and visualizing it via `Plotly` (Candlestick and Volume charts).
 - **Backtesting**: `src/backtest.py` integrates `backtrader` with the Streamlit app. It supports `SMA Crossover` and `MACD` strategies.
 
 ## Commands
-- **Run the service (local or Railway)**: `./start.sh` — single entrypoint for both environments. Locally it creates/activates `venv`, installs deps, sets dev creds, starts the crawler in the background, and runs the dashboard on `localhost`. On Railway (detected via `$RAILWAY_ENVIRONMENT`) it skips local setup and binds `0.0.0.0` headless.
+- **Run the service (local or Railway)**: `./start.sh` — single entrypoint for both environments. Locally it creates/activates `venv`, installs deps, sets dev creds, brings up the local PostgreSQL Docker container and exports `DATABASE_PUBLIC_URL`, starts the crawler in the background, and runs the dashboard on `localhost`. On Railway (detected via `$RAILWAY_ENVIRONMENT`) it skips local setup and binds `0.0.0.0` headless, using the `DATABASE_PUBLIC_URL` from the dashboard.
+- **Local PostgreSQL** (manual): `docker compose up -d postgres` (connection: `postgresql://stocks:stocks@localhost:5432/stocks`).
 - **Activate Virtual Environment** (manual): `source venv/bin/activate`
 - **Run Crawler** (manual): `python src/crawler.py`
 - **Run Web App** (manual): `streamlit run src/app.py`
@@ -24,10 +25,10 @@
 - **Config**: `railway.json` defines the build and deploy settings. Builder is `RAILPACK`; restart policy is `ON_FAILURE` with up to 5 retries.
 - **Start command**: `bash start.sh` (also mirrored in `Procfile`). The same `start.sh` serves local dev and Railway, branching on `$RAILWAY_ENVIRONMENT`. It launches `src/crawler.py` in the background and runs the Streamlit dashboard in the foreground.
 - **Port binding**: Streamlit binds to Railway's injected `$PORT` (defaults to `8501` locally), on address `0.0.0.0` in headless mode.
-- **Persistence note**: SQLite data at `data/stocks.db` lives on the container's ephemeral filesystem and is reset on redeploy unless a Railway volume is mounted.
+- **Database**: Set `DATABASE_PUBLIC_URL` in the Railway dashboard (Variables tab) to point at a PostgreSQL instance (e.g. a Railway Postgres plugin). Data persists in Postgres across redeploys, independent of the app container's ephemeral filesystem.
 
 ## Development Guidelines
 - Always use the `venv` for running commands (`source venv/bin/activate`).
 - Ensure `PYTHONPATH` allows imports from `src/` when necessary.
-- Database operations should handle timezone conversion cleanly, as SQLite does not natively support tz-aware timestamps natively (convert to naive UTC).
+- Database operations store naive UTC timestamps (the `timestamp` column is a tz-naive `DateTime`); convert tz-aware values to naive UTC before persisting.
 - Keep real-time crawler resilient against missing `yfinance` fields (like missing Volume).

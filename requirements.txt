@@ -5,4 +5,5 @@ plotly
 schedule
 backtrader
 sqlalchemy
+psycopg2-binary
 streamlit-cookies-controller

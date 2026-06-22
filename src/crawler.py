@@ -41,21 +41,32 @@ def fetch_and_save_data():
             ticker_data = data.dropna()
 
             for timestamp, row in ticker_data.iterrows():
+                # Normalize to a naive UTC python datetime (Postgres/psycopg2
+                # won't adapt pandas Timestamps).
+                ts = pd.to_datetime(timestamp)
+                if ts.tzinfo is not None:
+                    ts = ts.tz_convert('UTC').tz_localize(None)
+                ts = ts.to_pydatetime()
+
                 # Check if it already exists to avoid duplicates
                 exists = session.query(StockData).filter(
                     StockData.ticker == ticker,
-                    StockData.timestamp == timestamp
+                    StockData.timestamp == ts
                 ).first()
 
                 if not exists:
+                    vol = row['Volume']
+                    if pd.isna(vol):
+                        vol = 0
+                    # Cast to native Python types; psycopg2 can't adapt numpy scalars.
                     record = StockData(
                         ticker=ticker,
-                        timestamp=timestamp,
-                        open=row['Open'],
-                        high=row['High'],
-                        low=row['Low'],
-                        close=row['Close'],
-                        volume=row['Volume']
+                        timestamp=ts,
+                        open=float(row['Open']),
+                        high=float(row['High']),
+                        low=float(row['Low']),
+                        close=float(row['Close']),
+                        volume=float(vol)
                     )
                     session.add(record)
                     records_added += 1
@@ -69,11 +80,12 @@ def fetch_and_save_data():
                 ticker_data = data[ticker].dropna()
 
                 for timestamp, row in ticker_data.iterrows():
-                    # Handle tz-aware timestamps if needed
+                    # Normalize to a naive UTC python datetime (Postgres/psycopg2
+                    # won't adapt pandas Timestamps).
                     ts = pd.to_datetime(timestamp)
                     if ts.tzinfo is not None:
-                        # SQLite doesn't handle tz-aware well, convert to naive UTC
                         ts = ts.tz_convert('UTC').tz_localize(None)
+                    ts = ts.to_pydatetime()
 
                     exists = session.query(StockData).filter(
                         StockData.ticker == ticker,
@@ -86,14 +98,15 @@ def fetch_and_save_data():
                         if pd.isna(vol):
                             vol = 0
 
+                        # Cast to native Python types; psycopg2 can't adapt numpy scalars.
                         record = StockData(
                             ticker=ticker,
                             timestamp=ts,
-                            open=row['Open'],
-                            high=row['High'],
-                            low=row['Low'],
-                            close=row['Close'],
-                            volume=vol
+                            open=float(row['Open']),
+                            high=float(row['High']),
+                            low=float(row['Low']),
+                            close=float(row['Close']),
+                            volume=float(vol)
                         )
                         session.add(record)
                         records_added += 1

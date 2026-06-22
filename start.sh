@@ -44,6 +44,16 @@ if [ "$IS_LOCAL" -eq 1 ]; then
   export APP_USERNAME="${APP_USERNAME:-me}"
   export APP_PASSWORD="${APP_PASSWORD:-secret}"
   echo "==> Login: user='${APP_USERNAME}' password='${APP_PASSWORD}'"
+
+  # Bring up a local PostgreSQL container and point the app at it.
+  # On Railway, DATABASE_PUBLIC_URL is provided by the dashboard instead.
+  echo "==> Starting local PostgreSQL (Docker)..."
+  docker compose up -d postgres
+  echo "==> Waiting for PostgreSQL to be ready..."
+  until docker compose exec -T postgres pg_isready -U stocks -d stocks >/dev/null 2>&1; do
+    sleep 1
+  done
+  export DATABASE_PUBLIC_URL="${DATABASE_PUBLIC_URL:-postgresql://stocks:stocks@localhost:5432/stocks}"
 fi
 
 # Ensure imports from src/ resolve in both environments.
